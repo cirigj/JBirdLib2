@@ -1,11 +1,9 @@
 using UnityEngine;
 using UnityEngine.UI;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace JBirdLib
 {
@@ -17,23 +15,31 @@ namespace JBirdLib
     {
 
         /// <summary>
-        /// Returns n raised to the p power.
+        /// Returns n raised to the p power as an extension of the integer class.
         /// </summary>
-        public static int IntPow(int n, int p) {
+        public static int Pow(this int n, uint p) {
             if (p == 0) {
                 return 1;
             }
-            return n * IntPow(n, p - 1);
+            return n * Pow(n, p - 1);
         }
 
         /// <summary>
-        /// Returns n raised to the p power.
+        /// Returns n raised to the p power as an extension of the integer class.
         /// </summary>
-        public static float IntPow(float n, int p) {
-            if (p == 0) {
+        public static int Pow(this int n, int p) {
+            if (p < 0) {
+                Debug.LogWarning("MathHelper: Trying to use negative exponent for integer exponentiation.");
                 return 1;
             }
-            return n * IntPow(n, p - 1);
+            return n.Pow((uint)p);
+        }
+
+        /// <summary>
+        /// Returns the float but with numbers that approximate to zero returned as zero.
+        /// </summary>
+        public static float ApproximateZero(this float n, float tolerance = 0.00001f) {
+            return Mathf.Abs(n) < tolerance ? 0f : n;
         }
 
     }
@@ -51,6 +57,14 @@ namespace JBirdLib
             component.gameObject.SetActive(value);
         }
 
+        /// <summary>
+        /// Enables/disables a behaviour and sets gameObject activeness accordingly.
+        /// </summary>
+        public static void SetActiveAndEnabled(this Behaviour behaviour, bool value) {
+            behaviour.gameObject.SetActive(value);
+            behaviour.enabled = value;
+        }
+
     }
 
     /// <summary>
@@ -58,29 +72,47 @@ namespace JBirdLib
     /// </summary>
     public static class Singleton
     {
+        private static Dictionary<string, Component> registered;
 
         /// <summary>
-        /// THERE CAN ONLY BE ONE (Makes sure there's only one of this class). For use in Awake();
+        /// Assures that there's only one instance of this component in the active scene. Recommended for use in Awake().
+        /// If the class already has a registered singleton, will destroy the entire GameObject this instance is attached to.
         /// </summary>
-        /// <param name="instance">This instance.</param>
-        /// <param name="singleton">Singleton variable.</param>
+        /// <param name="obj">This instance.</param>
         /// <typeparam name="T">Must inherit from Component.</typeparam>
-        public static void Manage<T>(T instance, ref T singleton) where T : Component {
-            if (singleton == null) {
-                singleton = instance;
+        public static bool CreateSingleton<T>(this T obj, bool persist = false) where T : Component {
+            if (!Application.isPlaying) {
+                obj.Error("Attempting to make a singleton instance when the application is not playing!");
+                return false;
+            }
+            string typeName = obj.GetType().Name;
+            if (!registered.ContainsKey(typeName)) {
+                registered[typeName] = obj;
+                if (persist) {
+                    UnityEngine.Object.DontDestroyOnLoad(obj.gameObject);
+                }
+                return true;
             }
             else {
-                if (Application.isPlaying) {
-                    GameObject.Destroy(instance.gameObject);
-                }
+                UnityEngine.Object.Destroy(obj.gameObject);
+                return false;
             }
         }
 
-        public static T Check<T>(ref T instance) where T : Component {
-            if (JDebug.showMessages && !instance) {
-                Debug.LogWarningFormat("{0}: Singleton instance not set!", typeof(T).Name);
+        /// <summary>
+        /// Get the registered singleton instance of the given type.
+        /// Recommended for use inside a static instance property.
+        /// </summary>
+        /// <typeparam name="T">The type of singleton to retrieve.</typeparam>
+        public static T Get<T>() where T : Component {
+            string typeName = typeof(T).Name;
+            if (registered.ContainsKey(typeName)) {
+                return (T)registered[typeName];
             }
-            return instance;
+            else {
+                Debug.LogErrorFormat("{0}: Attempting to fetch a singleton that hasn't been initialized yet!", typeName);
+                return null;
+            }
         }
 
     }
@@ -92,77 +124,55 @@ namespace JBirdLib
     {
 
         /// <summary>
-        /// Attribute for drawing an enum as a mask field in inspector.
+        /// Returns an enum that is a combination of the given flag sets.
         /// </summary>
-        public class EnumFlagsAttribute : PropertyAttribute
-        {
-            public EnumFlagsAttribute() { }
+        public static T CombineFlags<T>(params T[] flagSets) where T : Enum {
+            if (!typeof(T).IsEnum) {
+                throw new ArgumentException(string.Format("EnumHelper: {0} is not an enumeration.", typeof(T)));
+            }
+            return (T)Enum.ToObject(typeof(T), flagSets.Aggregate(0, (r, f) => r | Convert.ToInt32(f)));
         }
 
         /// <summary>
-        /// Returns an enum that is a combination of the given flags.
+        /// Returns a concatenation of this flag set and any number of additional flag sets.
         /// </summary>
-        /// <param name="flags">Flags to combine.</param>
-        /// <typeparam name="T">Must be an enum.</typeparam>
-        public static T CombineFlags<T>(params T[] flags) where T : IConvertible, IFormattable, IComparable {
+        public static T Concat<T>(this T flagSet, params T[] flagSets) where T : Enum {
             if (!typeof(T).IsEnum) {
-                throw new ArgumentException("CombineFlags<T>(): 'T' must be of type 'enum'");
+                throw new ArgumentException(string.Format("EnumHelper: {0} is not an enumeration.", typeof(T)));
             }
-            T newFlags = (T)Enum.ToObject(typeof(T), 0);
-            foreach (T flag in flags) {
-                newFlags = (T)Enum.ToObject(typeof(T), Convert.ToInt32(newFlags) | Convert.ToInt32(flag));
-            }
-            return newFlags;
+            return (T)Enum.ToObject(typeof(T), flagSets.Aggregate(Convert.ToInt32(flagSet), (r, f) => r | Convert.ToInt32(f)));
         }
 
         /// <summary>
-        /// Returns the collection of flags that have been toggled.
+        /// Returns this flag set with the given flags toggled.
+        /// May return unwanted results if the same flag is present more than once.
         /// </summary>
-        /// <param name="flag">Base collection of flags.</param>
-        /// <param name="toggleList">List of flags to toggle.</param>
-        /// <typeparam name="T">Must be an enum.</typeparam>
-        public static T ToggleFlags<T>(T flag, params T[] toggleList) where T : IConvertible, IFormattable, IComparable {
+        public static T Toggle<T>(this T flagSet, params T[] toggleSets) where T : Enum {
             if (!typeof(T).IsEnum) {
-                throw new ArgumentException("ToggleFlags<T>(): 'T' must be of type 'enum'");
+                throw new ArgumentException(string.Format("EnumHelper: {0} is not an enumeration.", typeof(T)));
             }
-            T newFlags = flag;
-            foreach (T toggle in toggleList) {
-                newFlags = (T)Enum.ToObject(typeof(T), Convert.ToInt32(newFlags) ^ Convert.ToInt32(toggle));
-            }
-            return newFlags;
+            return (T)Enum.ToObject(typeof(T), toggleSets.Aggregate(Convert.ToInt32(flagSet), (r, f) => r ^ Convert.ToInt32(f)));
         }
 
         /// <summary>
-        /// Returns the base collection of flags minus the flags from the list.
+        /// Returns this flag set with the given flags removed.
+        /// If a flag is not in the original flag set, it will be ignored.
         /// </summary>
-        /// <param name="flag">Base collection of flags.</param>
-        /// <param name="removeList">List of flags to toggle.</param>
-        /// <typeparam name="T">Must be an enum.</typeparam>
-        public static T RemoveFlags<T>(T flag, params T[] removeList) where T : IConvertible, IFormattable, IComparable {
+        public static T Remove<T>(this T flagSet, params T[] removeSets) where T : Enum {
             if (!typeof(T).IsEnum) {
-                throw new ArgumentException("RemoveFlags<T>(): 'T' must be of type 'enum'");
+                throw new ArgumentException(string.Format("EnumHelper: {0} is not an enumeration.", typeof(T)));
             }
-            T newFlags = flag;
-            foreach (T remove in removeList) {
-                newFlags = (T)Enum.ToObject(typeof(T), Convert.ToInt32(newFlags) ^ Convert.ToInt32(remove));
-                newFlags = (T)Enum.ToObject(typeof(T), Convert.ToInt32(flag) & Convert.ToInt32(newFlags));
-                flag = newFlags;
-            }
-            return newFlags;
+            return (T)Enum.ToObject(typeof(T), removeSets.Aggregate(Convert.ToInt32(flagSet), (r, f) => r & (r ^ Convert.ToInt32(f))));
         }
 
         /// <summary>
-        /// Returns whether or not a collection of flags contains another collection of flags.
+        /// Returns whether or not this flag set perfectly contains a given collection of flags.
         /// </summary>
-        /// <returns><c>true</c>, if flag contained checkFor, <c>false</c> otherwise.</returns>
-        /// <param name="flag">Base collection of flags.</param>
-        /// <param name="checkFor">Collection of flags to check for.</param>
-        /// <typeparam name="T">Must be an enum.</typeparam>
-        public static bool ContainsFlag<T>(T flag, T checkFor) where T : IConvertible, IFormattable, IComparable {
+        public static bool Contains<T>(this T flagSet, T checkFor) where T : Enum {
             if (!typeof(T).IsEnum) {
-                throw new ArgumentException("ContainsFlag<T>(): 'T' must be of type 'enum'");
+                throw new ArgumentException(string.Format("EnumHelper: {0} is not an enumeration.", typeof(T)));
             }
-            return (Convert.ToInt32(flag) & Convert.ToInt32(checkFor)) == Convert.ToInt32(checkFor);
+            return (Convert.ToInt32(flagSet) & Convert.ToInt32(checkFor)) == Convert.ToInt32(checkFor);
         }
 
         /// <summary>
@@ -172,11 +182,11 @@ namespace JBirdLib
         /// <param name="value">String to convert.</param>
         /// <param name="returnEnum">Enum created from string.</param>
         /// <returns>True if the enum can be parsed from the string, false otherwise.</returns>
-        public static bool TryParse<T>(string value, out T returnEnum) where T : IConvertible, IFormattable, IComparable {
+        public static bool TryParse<T>(this string value, out T returnEnum) where T : Enum {
             if (!typeof(T).IsEnum) {
-                throw new ArgumentException("TryParse<T>(): 'T' must be of type 'enum'");
+                throw new ArgumentException(string.Format("EnumHelper: {0} is not an enumeration.", typeof(T)));
             }
-            returnEnum = default(T);
+            returnEnum = default;
             if (Enum.IsDefined(typeof(T), value)) {
                 returnEnum = (T)Enum.Parse(typeof(T), value);
                 return true;
@@ -187,18 +197,34 @@ namespace JBirdLib
         /// <summary>
         /// Attempts to convert a string value to an enum value of the given type. Returns default on failure.
         /// </summary>
-        /// <typeparam name="T">Enum type to convert to.</typeparam>
-        /// <param name="value">String to convert.</param>
-        /// <returns>Enum value from string, or default if TryParse fails.</returns>
-        public static T ToEnum<T>(this string value) where T : IConvertible, IFormattable, IComparable {
+        public static T ToEnum<T>(this string value) where T : Enum {
             if (!typeof(T).IsEnum) {
-                throw new ArgumentException("ToEnum<T>(): 'T' must be of type 'enum'");
+                throw new ArgumentException(string.Format("EnumHelper: {0} is not an enumeration.", typeof(T)));
             }
-            T enumValue;
-            if (!TryParse<T>(value, out enumValue)) {
+            if (!TryParse(value, out T enumValue)) {
                 Debug.LogErrorFormat("ToEnum<{0}>(): Value '{1}' does not exist within {0}.", typeof(T), value);
             }
             return enumValue;
+        }
+
+        /// <summary>
+        /// Get the combination of all possible flags of the given type.
+        /// </summary>
+        public static T Everything<T>() where T : Enum {
+            if (!typeof(T).IsEnum) {
+                throw new ArgumentException(string.Format("EnumHelper: {0} is not an enumeration.", typeof(T)));
+            }
+            return CombineFlags(Enum.GetValues(typeof(T)) as T[]);
+        }
+
+        /// <summary>
+        /// Get the empty set of flags for the given type.
+        /// </summary>
+        public static T Nothing<T>() where T : Enum {
+            if (!typeof(T).IsEnum) {
+                throw new ArgumentException(string.Format("EnumHelper: {0} is not an enumeration.", typeof(T)));
+            }
+            return (T)Enum.ToObject(typeof(T), 0);
         }
 
     }
@@ -210,96 +236,102 @@ namespace JBirdLib
     {
 
         /// <summary>
-        /// Creates a list out of the parameters.
+        /// Creates a list out of the argument parameters.
         /// </summary>
-        /// <returns>A new list containing the objects passed as parameters.</returns>
-        /// <param name="objects">Objects to put in a new list.</param>
-        public static List<T> ListFromObjects<T>(params T[] objects) {
-            List<T> newList = new List<T>();
-            foreach (T obj in objects) {
-                newList.Add(obj);
-            }
-            return newList;
+        public static List<T> MakeList<T>(params T[] objects) {
+            return objects.ToList();
         }
 
         /// <summary>
         /// Returns the element of the list which is the closest to a given position (or null if none are within a specified range).
         /// </summary>
-        /// <param name="list">List to check.</param>
-        /// <param name="position">Position to check against.</param>
-        /// <param name="maxDist">Max distance the element can be from the position in question (defaults to Mathf.Infinity).</param>
-        public static T GetClosestToPosition<T>(List<T> list, Vector3 position, float maxDist = Mathf.Infinity) where T : Component {
-            T bestObj = null;
-            foreach (T obj in list) {
-                float dist = Vector3.Distance(obj.transform.position, position);
-                if (dist < maxDist) {
-                    maxDist = dist;
-                    bestObj = obj;
-                }
-            }
-            return bestObj;
+        public static T GetClosestToPosition<T>(this List<T> objects, Vector3 position, float maxDist = Mathf.Infinity) where T : Component {
+            return objects
+                .Select(o => new { obj = o, dist = Vector3.Distance(o.transform.position, position) })
+                .Where(a => a.dist < maxDist)
+                .OrderBy(a => a.dist)
+                .Select(a => a.obj)
+                .FirstOrDefault();
         }
 
         /// <summary>
         /// Returns the element of the list which is the closest to a given position within a certain range (or null if none are within range).
         /// </summary>
-        /// <param name="list">List to check.</param>
-        /// <param name="position">Position to check against.</param>
-        /// <param name="maxDist">Max distance the element can be from the position in question.</param>
-        public static T GetClosestWithinRange<T>(List<T> list, Vector3 position, float maxDist) where T : Component {
-            return GetClosestToPosition(list, position, maxDist);
+        public static T GetClosestWithinRange<T>(this List<T> objects, Vector3 position, float maxDist) where T : Component {
+            return GetClosestToPosition(objects, position, maxDist);
         }
 
         /// <summary>
-        /// Returns the first element from a list and then removes it from the list (Returns default of the specified type if list is empty).
+        /// Returns the first element from a list and then removes it from the list.
         /// </summary>
-        /// <typeparam name="T">The type of the list.</typeparam>
-        /// <param name="list">The list to pop from.</param>
-        /// <param name="hideWarnings">Set to true to disable warning messages if the list is empty.</param>
-        /// <returns>First element of supplied list.</returns>
-        public static T PopFront<T>(this List<T> list, bool hideWarnings = false) {
-            if (list.Count == 0) {
-                if (!hideWarnings) {
-                    Debug.LogWarningFormat("List<{0}>.PopFront(): List is empty! Returning default {0}.", typeof(T));
-                }
-                return default(T);
+        public static T PopFront<T>(this List<T> objects) {
+            if (objects.Count == 0) {
+                throw new ArgumentOutOfRangeException("PopFront: Attempting to pop from empty list.");
             }
-            T temp = list[0];
-            list.RemoveAt(0);
+            return objects.PopFrontOrDefault();
+        }
+
+        /// <summary>
+        /// Returns the first element from a list and then removes it from the list.
+        /// Returns default of the specified type if list is empty.
+        /// </summary>
+        public static T PopFrontOrDefault<T>(this List<T> objects) {
+            if (objects.Count == 0) {
+                return default;
+            }
+            T temp = objects.FirstOrDefault();
+            objects.RemoveAt(0);
             return temp;
         }
 
         /// <summary>
-        /// Removes the item from the list, but leaves an empty slot in its place with the default value.
+        /// Returns the last element from a list and then removes it from the list.
         /// </summary>
-        /// <typeparam name="T">The type of item stored in the list.</typeparam>
-        /// <param name="passedList">The list to remove from.</param>
-        /// <param name="item">The item to remove.</param>
-        /// <returns></returns>
-        public static bool RemoveToDefault<T>(this List<T> passedList, T item) {
-            if (passedList.Contains(item)) {
-                passedList[passedList.IndexOf(item)] = default(T);
+        public static T PopBack<T>(this List<T> objects) {
+            if (objects.Count == 0) {
+                throw new ArgumentOutOfRangeException("PopBack: Attempting to pop from empty list.");
+            }
+            return objects.PopBackOrDefault();
+        }
+
+        /// <summary>
+        /// Returns the last element from a list and then removes it from the list.
+        /// Returns default of the specified type if list is empty.
+        /// </summary>
+        public static T PopBackOrDefault<T>(this List<T> objects) {
+            if (objects.Count == 0) {
+                return default;
+            }
+            T temp = objects.LastOrDefault();
+            objects.RemoveAt(objects.Count - 1);
+            return temp;
+        }
+
+        /// <summary>
+        /// Removes the first occurence of an item from the list, but leaves an empty slot in its place with the default value for that type.
+        /// </summary>
+        public static bool RemoveToDefault<T>(this List<T> objects, T item) {
+            if (objects.Contains(item)) {
+                objects[objects.IndexOf(item)] = default;
+                return true;
             }
             return false;
         }
 
         /// <summary>
-        /// Adds the item to the first empty slot in the list (empty slot defined by the default value).
+        /// Adds the item to the first empty slot in the list (emptiness defined by the default value for the element type).
+        /// Will expand the list by default if there's not enough space, but this can be disabled by setting expandList to false.
         /// </summary>
-        /// <typeparam name="T">The type of item stored in the list (must inherit from class).</typeparam>
-        /// <param name="passedList">The list to add to.</param>
-        /// <param name="item">The item to add.</param>
-        /// <param name="expandList">If false, won't expand the list (defaults to true).</param>
-        /// <returns></returns>
-        public static bool AddToFirstEmpty<T>(this List<T> passedList, T item, bool expandList = true) where T : class {
-            for (int i = 0; i < passedList.Count; i++) {
-                if (passedList[i] == default(T)) {
-                    passedList[i] = item;
+        public static bool AddToFirstEmpty<T>(this List<T> objects, T item, bool expandList = true) where T : class {
+            int index = objects.IndexOf(default);
+            if (index == -1) {
+                if (expandList) {
+                    objects.Add(item);
                     return true;
                 }
             }
-            if (expandList) {
-                passedList.Add(item);
+            else {
+                objects[index] = item;
                 return true;
             }
             return false;
@@ -308,15 +340,12 @@ namespace JBirdLib
         /// <summary>
         /// Adds the item to the beginning of the list.
         /// </summary>
-        /// <typeparam name="T">The type of item stored in the list.</typeparam>
-        /// <param name="passedList">The list to add to.</param>
-        /// <param name="item">The item to add.</param>
-        public static void AddToFront<T>(this List<T> passedList, T item) {
-            List<T> tempList = new List<T>(passedList);
-            passedList.Clear();
-            passedList.Add(item);
-            foreach (T entry in tempList) {
-                passedList.Add(entry);
+        public static void AppendToFront<T>(this List<T> objects, T item) {
+            List<T> tempList = objects.ToList();
+            objects.Clear();
+            objects.Add(item);
+            foreach (T obj in tempList) {
+                objects.Add(obj);
             }
         }
 
@@ -332,7 +361,7 @@ namespace JBirdLib
         /// Capitalize the specified char (must be alphabetical).
         /// </summary>
         public static char Capitalize(this char c) {
-            int i = (int)c;
+            int i = c;
             if (97 <= i && i <= 122) {
                 return (char)(i - 32);
             }
@@ -345,7 +374,7 @@ namespace JBirdLib
         /// Lowercase the specified char (must be alphabetical).
         /// </summary>
         public static char Lowercase(this char c) {
-            int i = (int)c;
+            int i = c;
             if (65 <= i && i <= 90) {
                 return (char)(i + 32);
             }
@@ -356,70 +385,71 @@ namespace JBirdLib
 
     }
 
-    namespace Angles
+    /// <summary>
+    /// A Vector3 where the x and y components are treated as azimuth and elevation angles, respectively. The z value is treated as the magnitude.
+    /// Can be implicitly cast and serialized as a Vector3.
+    /// </summary>
+    [System.Serializable]
+    public class AngleVector3
+    {
+        public AngleVector3() {
+            azimuth = 0;
+            elevation = 0;
+            magnitude = 1;
+        }
+
+        public AngleVector3(Angle a, Angle e, float m) {
+            azimuth = a;
+            elevation = e;
+            magnitude = m;
+        }
+
+        [SerializeField]
+        private float _azimuth;
+        [SerializeField]
+        private float _elevation;
+
+        public Angle azimuth { get { return _azimuth; } set { _azimuth = value; } }
+        public Angle elevation { get { return _elevation; } set { _elevation = value; } }
+        public float magnitude;
+
+        public static implicit operator Vector3(AngleVector3 aVec) {
+            return aVec.ToVector3();
+        }
+
+        public static implicit operator AngleVector3(Vector3 vec) {
+            float a = vec.GetAzimuth(Vector3.zero, Vector3.up, Vector3.forward, out float e);
+            return new AngleVector3(a, e, vec.magnitude);
+        }
+
+        public Vector3 ToVector3() {
+            return VectorHelper.FromAzimuthAndElevation(this) * magnitude;
+        }
+    }
+
+    /// <summary>
+    /// A float that automatically uses modulo 360.
+    /// Can be implicitly cast as a float.
+    /// </summary>
+    [System.Serializable]
+    public class Angle
     {
 
-        /// <summary>
-        /// A Vector3 where the x and y components are treated as azimuth and elevation angles, respectively.
-        /// Can be implicitly cast as a Vector3.
-        /// </summary>
-        [System.Serializable]
-        public class AngleVector3
-        {
-
-            public AngleVector3(Vector3 v) {
-                vec = new Vector3(v.x % 360f, v.y % 360f, v.z);
-            }
-
-            [SerializeField]
-            private Vector3 vec;
-
-            public Angle azimuth { get { return vec.x; } set { vec.x = value; } }
-            public Angle elevation { get { return vec.y; } set { vec.y = value; } }
-            public float magnitude { get { return vec.z; } set { vec.z = value; } }
-
-            public float x { get { return vec.x % 360f; } set { vec.x = value % 360f; } }
-            public float y { get { return vec.y % 360f; } set { vec.y = value % 360f; } }
-            public float z { get { return vec.z; } set { vec.z = value; } }
-
-            public static implicit operator Vector3(AngleVector3 aVec) {
-                return new Vector3(aVec.vec.x % 360f, aVec.vec.y % 360f, aVec.vec.z);
-            }
-
-            public static implicit operator AngleVector3(Vector3 vec) {
-                return new AngleVector3(vec);
-            }
-
-            public Vector3 ToVector3() {
-                return VectorHelper.FromAzimuthAndElevation(this) * vec.magnitude;
-            }
+        public Angle(float f) {
+            val = f;
         }
 
-        /// <summary>
-        /// A float that automatically uses modulo 360.
-        /// Can be implicitly cast as a float.
-        /// </summary>
-        [System.Serializable]
-        public class Angle
-        {
+        [SerializeField]
+        private float _val;
+        public float val { get { return _val % 360f; } set { _val = value % 360f; } }
 
-            public Angle(float f) {
-                val = f;
-            }
-
-            [SerializeField]
-            private float _val;
-            public float val { get { return _val % 360f; } set { _val = value % 360f; } }
-
-            public static implicit operator float(Angle angle) {
-                return angle.val;
-            }
-
-            public static implicit operator Angle(float f) {
-                return new Angle(f);
-            }
+        public static implicit operator float(Angle angle) {
+            return angle.val;
         }
 
+        public static implicit operator Angle(float f) {
+            return new Angle(f);
+        }
     }
 
     /// <summary>
@@ -431,70 +461,54 @@ namespace JBirdLib
         /// <summary>
         /// Returns the midpoint between two vectors.
         /// </summary>
-        /// <param name="v1">The first vector.</param>
-        /// <param name="v2">The second vector.</param>
-        /// <returns>The midpoint of the two vectors.</returns>
         public static Vector3 Midpoint(Vector3 v1, Vector3 v2) {
             return (v1 + v2) / 2f;
         }
 
         /// <summary>
-        /// Returns a unit vector created via azimuth and elevation angles relative to the world coordinates.
+        /// Returns a unit vector created via azimuth and elevation angles relative to world coordinates.
         /// </summary>
         /// <param name="azimuth">Angle around the y-axis.</param>
         /// <param name="elevation">Angle between the desired vector and the xz-plane.</param>
-        /// <returns>A unit vector with the given azimuth and elevation angles.</returns>
-        public static Vector3 FromAzimuthAndElevation(float azimuth, float elevation) {
+        public static Vector3 FromAzimuthAndElevation(Angle azimuth, Angle elevation) {
             return FromAzimuthAndElevation(azimuth, elevation, Vector3.up, Vector3.forward);
         }
 
         /// <summary>
-        /// Returns a unit vector created via azimuth and elevation angles relative to the given directional vectors.
+        /// Returns a unit vector created via azimuth and elevation angles relative to world coordinates.
         /// </summary>
-        /// <param name="angles">The set of angles to for the calculation.</param>
-        /// <returns>A unit vector with the given azimuth and elevation angles.</returns>
-        public static Vector3 FromAzimuthAndElevation(Angles.AngleVector3 angles) {
+        public static Vector3 FromAzimuthAndElevation(AngleVector3 angles) {
             return FromAzimuthAndElevation(angles, Vector3.up, Vector3.forward);
         }
 
         /// <summary>
         /// Returns a unit vector created via azimuth and elevation angles relative to the given directional vectors.
         /// </summary>
-        /// <param name="azimuth">Angle around the y-axis.</param>
-        /// <param name="elevation">Angle between the desired vector and the xz-plane.</param>
+        /// <param name="angles">The set of angles to for the calculation.</param>
         /// <param name="up">The local positive y direction.</param>
         /// <param name="forward">The local positive z direction.</param>
-        /// <returns>A unit vector with the given azimuth and elevation angles.</returns>
-        public static Vector3 FromAzimuthAndElevation(float azimuth, float elevation, Vector3 up, Vector3 forward) {
-            Vector3 compoundVec = Vector3.zero;
-            up.Normalize();
-            forward.Normalize();
-            // relative x component
-            compoundVec += Mathf.Sin(Mathf.Deg2Rad * azimuth) * Mathf.Cos(Mathf.Deg2Rad * elevation) * Vector3.Cross(up, forward);
-            // relative y component
-            compoundVec += Mathf.Sin(Mathf.Deg2Rad * elevation) * up;
-            // relative z component
-            compoundVec += Mathf.Cos(Mathf.Deg2Rad * azimuth) * Mathf.Cos(Mathf.Deg2Rad * elevation) * forward;
-            return compoundVec;
+        public static Vector3 FromAzimuthAndElevation(AngleVector3 angles, Vector3 up, Vector3 forward) {
+            return FromAzimuthAndElevation(angles.azimuth, angles.elevation, up, forward);
         }
 
         /// <summary>
         /// Returns a unit vector created via azimuth and elevation angles relative to the given directional vectors.
         /// </summary>
-        /// <param name="angles">The set of angles to for the calculation.</param>
+        /// <param name="azimuth">Angle around the y-axis.</param>
+        /// <param name="elevation">Angle between the desired vector and the xz-plane.</param>
         /// <param name="up">The local positive y direction.</param>
         /// <param name="forward">The local positive z direction.</param>
-        /// <returns>A unit vector with the given azimuth and elevation angles.</returns>
-        public static Vector3 FromAzimuthAndElevation(Angles.AngleVector3 angles, Vector3 up, Vector3 forward) {
+        public static Vector3 FromAzimuthAndElevation(Angle azimuth, Angle elevation, Vector3 up, Vector3 forward) {
             Vector3 compoundVec = Vector3.zero;
-            up.Normalize();
-            forward.Normalize();
             // relative x component
-            compoundVec += Mathf.Sin(Mathf.Deg2Rad * angles.azimuth) * Mathf.Cos(Mathf.Deg2Rad * angles.elevation) * Vector3.Cross(up, forward);
+            float x = (Mathf.Sin(Mathf.Deg2Rad * azimuth) * Mathf.Cos(Mathf.Deg2Rad * elevation)).ApproximateZero();
+            compoundVec += Vector3.Cross(up.normalized, forward.normalized) * x;
             // relative y component
-            compoundVec += Mathf.Sin(Mathf.Deg2Rad * angles.elevation) * up;
+            float y = Mathf.Sin(Mathf.Deg2Rad * elevation).ApproximateZero();
+            compoundVec += up.normalized * y;
             // relative z component
-            compoundVec += Mathf.Cos(Mathf.Deg2Rad * angles.azimuth) * Mathf.Cos(Mathf.Deg2Rad * angles.elevation) * forward;
+            float z = (Mathf.Cos(Mathf.Deg2Rad * azimuth) * Mathf.Cos(Mathf.Deg2Rad * elevation)).ApproximateZero();
+            compoundVec += forward.normalized * z;
             return compoundVec;
         }
 
@@ -504,7 +518,6 @@ namespace JBirdLib
         /// <param name="position">The vector to find the elevation of.</param>
         /// <param name="center">The reference point.</param>
         /// <param name="up">The normal of the plane to find the elevation from.</param>
-        /// <returns>The elevation angle.</returns>
         public static float GetElevation(this Vector3 position, Vector3 center, Vector3 up) {
             return Mathf.Asin(Vector3.Dot((position - center).normalized, up.normalized)) * Mathf.Rad2Deg;
         }
@@ -515,11 +528,9 @@ namespace JBirdLib
         /// <param name="position">The vector to find the azimuth of.</param>
         /// <param name="center">The reference point.</param>
         /// <param name="up">The normal of the reference plane.</param>
-        /// <param name="forward">The forward direction to find the azimuth from in degrees.</param>
-        /// <returns>The azimuth angle.</returns>
+        /// <param name="forward">The forward direction to find the azimuth from.</param>
         public static float GetAzimuth(this Vector3 position, Vector3 center, Vector3 up, Vector3 forward) {
-            float elevation;
-            return position.GetAzimuth(center, up, forward, out elevation);
+            return position.GetAzimuth(center, up, forward, out _);
         }
 
         /// <summary>
@@ -528,9 +539,8 @@ namespace JBirdLib
         /// <param name="position">The vector to find the azimuth of.</param>
         /// <param name="center">The reference point.</param>
         /// <param name="up">The normal of the reference plane.</param>
-        /// <param name="forward">The forward direction to find the azimuth from in degrees.</param>
+        /// <param name="forward">The forward direction to find the azimuth from.</param>
         /// <param name="elevation">Optional out parameter to get the elevation value used during azimuth calculation.</param>
-        /// <returns>The azimuth angle.</returns>
         public static float GetAzimuth(this Vector3 position, Vector3 center, Vector3 up, Vector3 forward, out float elevation) {
             elevation = position.GetElevation(center, up);
             Vector3 right = Vector3.Cross(up.normalized, forward.normalized).normalized;

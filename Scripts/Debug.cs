@@ -9,75 +9,36 @@ namespace JBirdLib
 {
 
     /// <summary>
-    /// Helper functions for debugging.
+    /// Helper functions for debugging with consistent formatting.
     /// </summary>
     public static class JDebug
     {
-
-        public static bool showMessages {
-            get {
-                #if SHOW_MESSAGES
-                return true;
-                #else
-                return false;
-                #endif
-            }
-        }
-
+        /// <summary>
+        /// Extension method for formatting log messages.
+        /// </summary>
         public static void Log(this Object obj, string message) {
             Debug.Log(obj.MessageFormat(message));
         }
 
+        /// <summary>
+        /// Extension method for formatting log warning messages.
+        /// </summary>
         public static void Warning(this Object obj, string message) {
             Debug.LogWarning(obj.MessageFormat(message));
         }
 
+        /// <summary>
+        /// Extension method for formatting log error messages.
+        /// </summary>
         public static void Error(this Object obj, string message) {
             Debug.LogError(obj.MessageFormat(message));
         }
 
-        public static string MessageFormat(this Object obj, string message) {
-            return MessageFormat(message, obj.GetType());
+        /// <summary>
+        /// Internal method for formatting debug messages.
+        /// </summary>
+        internal static string MessageFormat(this Object obj, string message) {
+            return string.Format("{0}: {1}", obj.GetType().Name, message);
         }
-
-        public static string MessageFormat(string message, System.Type type) {
-            return string.Format("{0}: {1}", type.Name, message);
-        }
-
-        public static T NullCheck<T>(this Object script, ref T obj, string varName = "variable") where T : Object {
-            if (showMessages && !obj) {
-                Debug.LogWarningFormat("{0}: {1}", script.GetType().Name, varName == "variable" ? "Variable is null!" : string.Format("Varaible '{0}' is null!", varName));
-            }
-            return obj;
-        }
-
-        public static T NullCheck<T>(ref T obj, string varName = "variable") where T : Object {
-            if (showMessages && !obj) {
-                Debug.LogWarning(varName == "variable" ? "Variable is null!" : string.Format("Variable '{0}' is null!", varName));
-            }
-            return obj;
-        }
-
-        public static T NullCheck<T>(ref T obj) where T : Object {
-            if (showMessages && !obj) {
-                Debug.LogWarning("Variable is null!");
-            }
-            return obj;
-        }
-
-        public static T NullCheckMessage<T>(this Object script, ref T obj, string message) where T : Object {
-            if (showMessages && !obj) {
-                Debug.LogWarning(MessageFormat(script, message));
-            }
-            return obj;
-        }
-
-        public static T NullCheckMessage<T>(ref T obj, string message) where T : Object {
-            if (showMessages && !obj) {
-                Debug.LogWarning(message);
-            }
-            return obj;
-        }
-
     }
 }

@@ -108,7 +108,7 @@ namespace JBirdLib
                 get { return _cornerDownLeft; }
             }
 
-            private static List<Vector3> _corners = ListHelper.ListFromObjects<Vector3>(_cornerDownRight, _cornerDownLeft, _cornerLeft, _cornerUpLeft, _cornerUpRight, _cornerRight);
+            private static List<Vector3> _corners = ListHelper.MakeList<Vector3>(_cornerDownRight, _cornerDownLeft, _cornerLeft, _cornerUpLeft, _cornerUpRight, _cornerRight);
 
             /// <summary>
             /// A list of corners of a hex tile (using the connection index on this list returns the corner that is located in a clockwise direction from the specified connection).
@@ -117,7 +117,7 @@ namespace JBirdLib
                 get { return new List<Vector3>(_corners); }
             }
 
-            private static List<Edge> _edges = ListHelper.ListFromObjects<Edge>(new Edge(_cornerDownRight, _cornerDownLeft),
+            private static List<Edge> _edges = ListHelper.MakeList<Edge>(new Edge(_cornerDownRight, _cornerDownLeft),
                                                                                 new Edge(_cornerDownLeft, _cornerLeft),
                                                                                 new Edge(_cornerLeft, _cornerUpLeft),
                                                                                 new Edge(_cornerUpLeft, _cornerUpRight),
@@ -230,7 +230,7 @@ namespace JBirdLib
             private static Vector3 _linkLeftUp = new Vector3(-Mathf.Cos(30f * Mathf.Deg2Rad), 0f, Mathf.Sin(30f * Mathf.Deg2Rad));
             private static Vector3 _linkLeftDown = new Vector3(-Mathf.Cos(30f * Mathf.Deg2Rad), 0f, -Mathf.Sin(30f * Mathf.Deg2Rad));
 
-            private static List<Vector3> _linkDirections = ListHelper.ListFromObjects<Vector3>(_linkDown, _linkLeftDown, _linkLeftUp, _linkUp, _linkRightUp, _linkRightDown);
+            private static List<Vector3> _linkDirections = ListHelper.MakeList<Vector3>(_linkDown, _linkLeftDown, _linkLeftUp, _linkUp, _linkRightUp, _linkRightDown);
 
             /// <summary>
             /// Returns the list of connection directions between hex tiles.
