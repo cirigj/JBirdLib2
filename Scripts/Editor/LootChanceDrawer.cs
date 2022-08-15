@@ -82,20 +82,27 @@ namespace JBirdLib
             y += h * (1f + padding);
 
             bool boundsAsRange = property.FindPropertyRelative("boundsAsRange").boolValue;
+
             property.FindPropertyRelative("minRoll").intValue =
-                EditorGUI.IntField(
+                Mathf.Max(EditorGUI.IntField(
                     new Rect(x, y, w, h),
                     boundsAsRange ? "Min Drops" : "Min Rolls",
                     property.FindPropertyRelative("minRoll").intValue
-                );
+                ), 0);
+            if (property.FindPropertyRelative("minRoll").intValue > property.FindPropertyRelative("maxRoll").intValue) {
+                property.FindPropertyRelative("minRoll").intValue = property.FindPropertyRelative("maxRoll").intValue;
+            }
             y += h * (1f + padding);
 
             property.FindPropertyRelative("maxRoll").intValue =
-                EditorGUI.IntField(
+                Mathf.Max(EditorGUI.IntField(
                     new Rect(x, y, w, h),
                     boundsAsRange ? "Max Drops" : "Max Rolls",
                     property.FindPropertyRelative("maxRoll").intValue
-                );
+                ), 0);
+            if (property.FindPropertyRelative("maxRoll").intValue < property.FindPropertyRelative("minRoll").intValue) {
+                property.FindPropertyRelative("maxRoll").intValue = property.FindPropertyRelative("minRoll").intValue;
+            }
             y += h * (1f + padding);
 
             property.FindPropertyRelative("boundsAsRange").boolValue =
@@ -135,11 +142,11 @@ namespace JBirdLib
                 y += h * (1f + padding);
 
                 property.FindPropertyRelative("numPerRoll").intValue =
-                    EditorGUI.IntField(
+                    Mathf.Max(EditorGUI.IntField(
                         new Rect(x, y, w, h),
                         "Drops Per Roll",
                         property.FindPropertyRelative("numPerRoll").intValue
-                    );
+                    ), 1);
                 y += h * (1f + padding);
 
                 property.FindPropertyRelative("rollIndependently").boolValue =
@@ -176,11 +183,11 @@ namespace JBirdLib
                 y += h * (1f + padding);
 
                 property.FindPropertyRelative("weight").floatValue =
-                    EditorGUI.FloatField(
+                    Mathf.Max(EditorGUI.FloatField(
                         new Rect(x, y, w, h),
                         "Weight",
                         property.FindPropertyRelative("weight").floatValue
-                    );
+                    ), 0f);
                 y += h * (1f + padding);
 
                 property.FindPropertyRelative("allowMultiples").boolValue =
