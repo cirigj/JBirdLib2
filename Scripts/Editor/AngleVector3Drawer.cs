@@ -1,12 +1,11 @@
 using UnityEditor;
-using UnityEditor.UIElements;
 using UnityEngine;
-using UnityEngine.UIElements;
 
-namespace JBirdLib {
+namespace JBirdLib
+{
     
     [CustomPropertyDrawer(typeof(AngleVector3))]
-    public class AngleVector3DrawerUIE : PropertyDrawer
+    public class AngleVector3Drawer : PropertyDrawer
     {
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label) {
             EditorGUI.BeginProperty(position, label, property);

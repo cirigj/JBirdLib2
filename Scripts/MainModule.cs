@@ -389,7 +389,7 @@ namespace JBirdLib
     /// A Vector3 where the x and y components are treated as azimuth and elevation angles, respectively. The z value is treated as the magnitude.
     /// Can be implicitly cast and serialized as a Vector3.
     /// </summary>
-    [System.Serializable]
+    [Serializable]
     public class AngleVector3
     {
         public AngleVector3() {
@@ -431,7 +431,7 @@ namespace JBirdLib
     /// A float that automatically uses modulo 360.
     /// Can be implicitly cast as a float.
     /// </summary>
-    [System.Serializable]
+    [Serializable]
     public class Angle
     {
 
