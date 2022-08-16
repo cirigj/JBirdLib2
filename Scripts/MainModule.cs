@@ -9,6 +9,18 @@ namespace JBirdLib
 {
 
     /// <summary>
+    /// View only attribute (for greying out in inspector).
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field, Inherited = true, AllowMultiple = true)]
+    public class ViewOnlyAttribute : PropertyAttribute
+    {
+        /// <summary>
+        /// View only attribute (for greying out in inspector).
+        /// </summary>
+        public ViewOnlyAttribute() { }
+    }
+
+    /// <summary>
     /// Helpful math functions that don't exist in base UnityEngine.
     /// </summary>
     public static class MathHelper
@@ -40,6 +52,13 @@ namespace JBirdLib
         /// </summary>
         public static float ApproximateZero(this float n, float tolerance = 0.00001f) {
             return Mathf.Abs(n) < tolerance ? 0f : n;
+        }
+
+        /// <summary>
+        /// Modulo of i % m, but locked to positive values.
+        /// </summary>
+        public static int AbsMod(this int i, int m) {
+            return (i % m + m) % m;
         }
 
     }

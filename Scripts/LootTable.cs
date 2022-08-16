@@ -33,14 +33,18 @@ namespace JBirdLib
 
         public LootChanceType chanceType;
         // all types
+        [Min(0)]
         public int minRoll;
+        [Min(0)]
         public int maxRoll;
+        [Min(1)]
         public int numPerRoll;
         public bool boundsAsRange; // toggles extraRollChance and rollIndependently
         [Range(0f,1f)]
         public float extraRollChance;
         public bool rollIndependently;
         // weighted
+        [Min(0f)]
         public float weight;
         public bool allowMultiples;
         // require all tags
